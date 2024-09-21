@@ -107,8 +107,20 @@ static NSString *const kTrashDirectoryName = @"trash";
     int  result = 0;
     BOOL retry = NO;
     BOOL stmtFinalized = NO;
-    
-    if (_dbStmtCache) CFRelease(_dbStmtCache);
+
+    // 参考: https://github.com/ibireme/YYCache/issues/166 修复Xcode16编译引起的闪退，在 iOS18 中，需要提前对 sqlite3_stmt 执行 sqlite3_finalize
+    if (_dbStmtCache) {
+        CFIndex size = CFDictionaryGetCount(_dbStmtCache);
+        CFTypeRef *valuesRef = (CFTypeRef *)malloc(size * sizeof(CFTypeRef));
+        CFDictionaryGetKeysAndValues(_dbStmtCache, NULL, (const void **)valuesRef);
+        const sqlite3_stmt **stmts = (const sqlite3_stmt **)valuesRef;
+        for (CFIndex i = 0; i < size; i ++) {
+            sqlite3_stmt *stmt = stmts[i];
+            sqlite3_finalize(stmt);
+        }
+        free(valuesRef);
+        CFRelease(_dbStmtCache);
+    }
     _dbStmtCache = NULL;
     
     do {
